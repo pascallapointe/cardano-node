@@ -94,7 +94,7 @@ import qualified Cardano.Api.Protocol.Types as Protocol
 
 import           Cardano.Config.Git.Rev (gitRev)
 
-import           Trace.Forward.Protocol.Type (NodeInfo (..))
+import           Trace.Forward.Protocol.Type (NodeInfo)
 
 import           Cardano.Node.Configuration.Socket (SocketOrSocketInfo (..),
                      gatherConfiguredSockets, getSocketOrSocketInfoAddr,
@@ -182,9 +182,10 @@ runNode cmdPc = do
           -- Used for ledger queries and peer connection status.
           nodeKernelData <- mkNodeKernelData
           let ProtocolInfo { pInfoConfig = cfg } = Protocol.protocolInfo runP
-          let fp = case getLast (pncConfigFile cmdPc) of
-                      Just fileName -> unConfigPath fileName
-                      Nothing       -> "No file path found!"
+          let fp = maybe
+                    "No file path found!"
+                    unConfigPath
+                    (getLast (pncConfigFile cmdPc))
           bi <- getBasicInfo nc p fp
           tracers <- mkDispatchTracers
                        (Consensus.configBlock cfg)
