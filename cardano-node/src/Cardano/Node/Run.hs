@@ -273,7 +273,7 @@ handleSimpleNode scp runP trace nodeTracers nc onKernel = do
     (appendName "ip-producers" trace)
     (meta, LogMessage . Text.pack . show $ ipProducers)
 
-  withShutdownHandling nc trace $ \sfds ->
+  withShutdownHandling (ncShutdownIPC nc) trace $
    Node.run
      RunNodeArgs
        { rnTraceConsensus = consensusTracers nodeTracers
@@ -281,7 +281,7 @@ handleSimpleNode scp runP trace nodeTracers nc onKernel = do
        , rnTraceNTC       = nodeToClientTracers nodeTracers
        , rnProtocolInfo   = pInfo
        , rnNodeKernelHook = \registry nodeKernel -> do
-           maybeSpawnOnSlotSyncedShutdownHandler nc sfds trace registry
+           maybeSpawnOnSlotSyncedShutdownHandler nc trace registry
              (Node.getChainDB nodeKernel)
            onKernel nodeKernel
        }
