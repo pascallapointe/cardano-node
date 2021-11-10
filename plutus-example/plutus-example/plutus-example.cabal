@@ -60,6 +60,7 @@ library
                         Cardano.PlutusExample.MintingScript
                         Cardano.PlutusExample.ScriptContextChecker
                         Cardano.PlutusExample.Sum
+                        Cardano.PlutusExample.Loop                        
 
   build-depends:        aeson
                       , bytestring
