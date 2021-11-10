@@ -166,9 +166,10 @@ data LocalNodeConnectInfo mode =
 
 type MinNodeToClientVersion = NodeToClientVersion
 
-data QueryError
+data QueryError a
   = QueryErrorAcquireFailure !Net.Query.AcquireFailure
   | QueryErrorUnsupportedVersion !MinNodeToClientVersion !NodeToClientVersion
+  | QueryErrorOf a
   deriving (Eq, Show)
 
 localConsensusMode :: LocalNodeConnectInfo mode -> ConsensusMode mode
@@ -486,19 +487,19 @@ convLocalStateQueryClient mode =
 -- | Establish a connection to a node and execute a single query using the
 -- local state query protocol.
 --
-queryNodeLocalState :: forall mode result.
+queryNodeLocalState :: forall mode result e.
                        LocalNodeConnectInfo mode
                     -> Maybe ChainPoint
                     -> QueryInMode mode result
-                    -> IO (Either QueryError result)
+                    -> IO (Either (QueryError e) result)
 queryNodeLocalState = queryNodeLocalStateWithVersion NodeToClientV_1
 
-queryNodeLocalStateWithVersion :: forall mode result.
+queryNodeLocalStateWithVersion :: forall mode result e.
                                   NodeToClientVersion
                                 -> LocalNodeConnectInfo mode
                                 -> Maybe ChainPoint
                                 -> QueryInMode mode result
-                                -> IO (Either QueryError result)
+                                -> IO (Either (QueryError e) result)
 queryNodeLocalStateWithVersion minNtcVersion connctInfo mpoint query = do
     resultVar <- newEmptyTMVarIO
     connectToLocalNodeWithVersion
@@ -514,7 +515,7 @@ queryNodeLocalStateWithVersion minNtcVersion connctInfo mpoint query = do
     singleQuery
       :: NodeToClientVersion
       -> Maybe ChainPoint
-      -> TMVar (Either QueryError result)
+      -> TMVar (Either (QueryError e) result)
       -> Net.Query.LocalStateQueryClient (BlockInMode mode) ChainPoint
                                          (QueryInMode mode) IO ()
     singleQuery ntcVersion mPointVar' resultVar' =

@@ -15,6 +15,8 @@ import Cardano.Api.IPC
 import Cardano.Api.Modes
 import Control.Applicative
 import Control.Concurrent.STM
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Cont
@@ -25,7 +27,6 @@ import Cardano.Ledger.Shelley.Scripts ()
 import System.IO
 
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as Net.Query
-import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as Net.Query
 
 {- HLINT ignore "Use const" -}
 {- HLINT ignore "Use let" -}
@@ -49,8 +50,8 @@ newtype LocalStateQueryExpr block point query r m a = LocalStateQueryExpr
 executeLocalStateQueryExpr
   :: LocalNodeConnectInfo mode
   -> Maybe ChainPoint
-  -> (NodeToClientVersion -> LocalStateQueryExpr (BlockInMode mode) ChainPoint (QueryInMode mode) () IO a)
-  -> IO (Either AcquireFailure a)
+  -> (NodeToClientVersion -> ExceptT (QueryError e) (LocalStateQueryExpr (BlockInMode mode) ChainPoint (QueryInMode mode) () IO) a)
+  -> IO (Either (QueryError e) a)
 executeLocalStateQueryExpr connectInfo mpoint f = do
   tmvResultLocalState <- newEmptyTMVarIO
   let waitResult = readTMVar tmvResultLocalState
@@ -74,26 +75,26 @@ setupLocalStateQueryExpr ::
      -- Protocols must wait until 'waitDone' returns because premature exit will
      -- cause other incomplete protocols to abort which may lead to deadlock.
   -> Maybe ChainPoint
-  -> TMVar (Either Net.Query.AcquireFailure a)
-  -> LocalStateQueryExpr (BlockInMode mode) ChainPoint (QueryInMode mode) () IO a
+  -> TMVar (Either (QueryError e) a)
+  -> ExceptT (QueryError e) (LocalStateQueryExpr (BlockInMode mode) ChainPoint (QueryInMode mode) () IO) a
   -> Net.Query.LocalStateQueryClient (BlockInMode mode) ChainPoint (QueryInMode mode) IO ()
 setupLocalStateQueryExpr waitDone mPointVar' resultVar' f =
   LocalStateQueryClient . pure . Net.Query.SendMsgAcquire mPointVar' $
     Net.Query.ClientStAcquiring
-    { Net.Query.recvMsgAcquired = runContT (runLocalStateQueryExpr f) $ \result -> do
-        atomically $ putTMVar resultVar' (Right result)
+    { Net.Query.recvMsgAcquired = runContT (runLocalStateQueryExpr (runExceptT f)) $ \result -> do
+        atomically $ putTMVar resultVar' result
         void $ atomically waitDone -- Wait for all protocols to complete before exiting.
         pure $ Net.Query.SendMsgRelease $ pure $ Net.Query.SendMsgDone ()
 
     , Net.Query.recvMsgFailure = \failure -> do
-        atomically $ putTMVar resultVar' (Left failure)
+        atomically $ putTMVar resultVar' (Left (QueryErrorAcquireFailure failure))
         void $ atomically waitDone -- Wait for all protocols to complete before exiting.
         pure $ Net.Query.SendMsgDone ()
     }
 
 -- | Use 'queryExpr' in a do block to construct monadic local state queries.
-queryExpr :: QueryInMode mode a -> LocalStateQueryExpr block point (QueryInMode mode) r IO a
-queryExpr q =
+queryExpr :: QueryInMode mode a -> ExceptT (QueryError e) (LocalStateQueryExpr block point (QueryInMode mode) r IO) a
+queryExpr q = lift $
   LocalStateQueryExpr . ContT $ \f -> pure $
     Net.Query.SendMsgQuery q $
       Net.Query.ClientStQuerying
@@ -103,7 +104,7 @@ queryExpr q =
 -- | A monad expresion that determines what era the node is in.
 determineEraExpr ::
      ConsensusModeParams mode
-  -> LocalStateQueryExpr block point (QueryInMode mode) r IO AnyCardanoEra
+  -> ExceptT (QueryError a) (LocalStateQueryExpr block point (QueryInMode mode) r IO) AnyCardanoEra
 determineEraExpr cModeParams =
   case consensusModeOnly cModeParams of
     ByronMode -> return $ AnyCardanoEra ByronEra
