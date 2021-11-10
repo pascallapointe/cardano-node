@@ -267,11 +267,17 @@ handleSimpleNode scp runP trace nodeTracers nc onKernel = do
     (appendName "diffusion-mode" trace)
     (meta, LogMessage . Text.pack . show . ncDiffusionMode $ nc)
   traceNamedObject
+    (appendName "blah" trace)
+    (meta, LogMessage . Text.pack $ "TEST")
+  traceNamedObject
     (appendName "dns-producers" trace)
     (meta, LogMessage . Text.pack . show $ dnsProducers)
   traceNamedObject
     (appendName "ip-producers" trace)
     (meta, LogMessage . Text.pack . show $ ipProducers)
+  traceNamedObject
+    (appendName "ipc-handle" trace)
+    (meta, LogMessage . Text.pack . show $ ncShutdownIPC nc)
 
   withShutdownHandling (ncShutdownIPC nc) trace $
    Node.run
