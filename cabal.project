@@ -32,7 +32,7 @@ package tx-generator
   ghc-options: -Werror
 
 package trace-dispatcher
-  ghc-options: -Werror
+  ghc-options: -Wwarn
 
 package trace-resources
   ghc-options: -Werror
